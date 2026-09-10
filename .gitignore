@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# SSL & TLS Certificates / Keys
+*.pem
+*.key
+*.crt
+!ca.pem
+
+# Backups & Logs
+backups/
+*.log

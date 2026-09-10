@@ -1,0 +1,39 @@
+BACKEND — what to do with this folder
+=======================================
+
+This is your SERVER (handles forms, admin login, live chat, database).
+It goes to Node.js hosting (e.g. GoDaddy Node.js Hosting, Render, Railway)
+— NOT the same place as your website files.
+
+STEP 1 — Zip this whole folder
+--------------------------------
+Zip everything inside this "backend" folder (keep the folder structure).
+This is the zip file you upload to your Node.js hosting.
+
+STEP 2 — Set environment variables / secrets
+----------------------------------------------
+Open ".env.example" in this folder to see the full list. On your hosting
+platform's "secrets" or "environment variables" screen, you MUST set:
+
+    JWT_SECRET          -> any long random string
+    JWT_REFRESH_SECRET  -> any long random string (different from above)
+    COOKIE_SECRET       -> any long random string (different again)
+    ADMIN_PASSWORD      -> a real password (NOT admin123)
+    FRONTEND_URL        -> your live website URL, e.g. https://lokahbuilders.com
+    NODE_ENV            -> production
+
+Optional but recommended (for password-reset emails to actually send):
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+
+The server will refuse to start in production if the required ones above
+are missing — this is intentional, it's a safety check.
+
+STEP 3 — Deploy
+------------------
+Follow your hosting platform's upload/deploy steps. Once it's live, open:
+
+    https://your-backend-url.com/health
+
+You should see a small JSON response confirming it's running. Copy this
+backend URL — you'll need it for the FRONTEND setup (see the frontend
+folder's instructions, Step 1).
