@@ -10,36 +10,10 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// 1. CLOUD MYSQL VALIDATION (NO LOCALHOST / NO LOCAL DB PERMITTED)
+// 1. MYSQL CONFIGURATION (Supports both local and cloud MySQL)
 // ---------------------------------------------------------------------------
-const isLocalhostHost = (host) => {
-  if (!host) return true;
-  const normalized = host.trim().toLowerCase();
-  return (
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '::1' ||
-    normalized === '0.0.0.0' ||
-    normalized.startsWith('127.')
-  );
-};
-
 const rawHost = process.env.DB_HOST || '';
 const rawDbUrl = process.env.DATABASE_URL || '';
-
-let isLocalConfigured = isLocalhostHost(rawHost);
-if (rawDbUrl) {
-  try {
-    const parsed = new URL(rawDbUrl);
-    if (isLocalhostHost(parsed.hostname)) {
-      isLocalConfigured = true;
-    }
-  } catch {
-    if (rawDbUrl.includes('localhost') || rawDbUrl.includes('127.0.0.1') || rawDbUrl.includes('::1')) {
-      isLocalConfigured = true;
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // 2. SSL CONFIGURATION (Defaulting to SSL enabled for Cloud MySQL / Aiven)
@@ -104,7 +78,7 @@ const dbPassword = process.env.DB_PASSWORD;
 
 let poolConfig = null;
 
-if (rawDbUrl && !isLocalConfigured) {
+if (rawDbUrl) {
   try {
     const parsedUrl = new URL(rawDbUrl);
     poolConfig = {
@@ -124,10 +98,10 @@ if (rawDbUrl && !isLocalConfigured) {
   } catch {
     poolConfig = rawDbUrl;
   }
-} else if (dbHost && !isLocalConfigured && dbName && dbUser && dbPort) {
+} else if (dbHost && dbName && dbUser) {
   poolConfig = {
     host: dbHost,
-    port: dbPort,
+    port: dbPort || 3306,
     database: dbName,
     user: dbUser,
     password: dbPassword,
@@ -223,9 +197,8 @@ const seedAdmin = async () => {
 };
 
 export const testConnection = async () => {
-  if (isLocalConfigured || !poolConfig) {
-    console.error('❌ Cloud MySQL database configuration missing or invalid.');
-    console.error('❌ Refusal: Application is strictly configured for REMOTE CLOUD MYSQL ONLY (e.g. Aiven). Localhost connections are blocked.');
+  if (!poolConfig) {
+    console.error('❌ MySQL database configuration missing or invalid.');
     return false;
   }
 
