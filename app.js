@@ -67,22 +67,27 @@ const allowedOrigins = Array.from(new Set([
   ...(process.env.NODE_ENV === 'production' ? defaultProductionOrigins : [...defaultProductionOrigins, ...devOrigins]),
 ]));
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow non-browser requests (e.g. mobile apps, curl, server-to-server)
+    // Allow non-browser requests (e.g. mobile apps, curl, server-to-server health checks)
     if (!origin) {
       return callback(null, true);
     }
-    const normalizedOrigin = origin.trim().replace(/\/+$/, '');
-    if (allowedOrigins.includes(normalizedOrigin)) {
+    const normalizedOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
+    const isAllowed = allowedOrigins.some(allowed => allowed.trim().replace(/\/+$/, '').toLowerCase() === normalizedOrigin);
+    if (isAllowed) {
       return callback(null, true);
     }
     return callback(new Error(`Blocked by CORS policy: Origin ${origin} not allowed`));
   },
   credentials: true, // Allow JWT HttpOnly secure cookies
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-}));
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Explicitly handle preflight for all routes
 
 // Request parsers
 app.use(express.json());
