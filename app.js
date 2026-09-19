@@ -45,9 +45,15 @@ const configuredFrontendUrls = (process.env.FRONTEND_URL || '')
   .filter(Boolean);
 
 const defaultProductionOrigins = [
+  // Vercel deployment
   'https://lokah-frontend-coral.vercel.app',
+  // Custom domain
   'https://lokahbuilders.com',
   'https://www.lokahbuilders.com',
+  // GoDaddy Airo — published frontend
+  'https://adp691i6fs.c40.airoapp.ai',
+  // GoDaddy Airo — preview frontend (used during GoDaddy's internal build preview)
+  'https://adp691i6fs.preview.c40.airoapp.ai',
 ];
 
 const devOrigins = [
