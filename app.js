@@ -26,6 +26,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust reverse proxy (essential for Render, Heroku, Cloudflare to detect HTTPS and client IPs correctly)
+app.set('trust proxy', 1);
+
 // Security Headers (Helmet)
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" } // Required to let front-end load local images
@@ -35,19 +38,40 @@ app.use(helmet({
 app.use(compression());
 
 // CORS configuration supporting cookies credentials exchange
-// FRONTEND_URL must be set to the real production domain (e.g. https://lokahbuilders.com).
-// In production, ONLY that origin is allowed — the localhost dev origin is never included.
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [process.env.FRONTEND_URL]
-  : [process.env.FRONTEND_URL || 'http://localhost:5173', 'http://localhost:5173'];
+// Parse FRONTEND_URL cleanly (trim, remove trailing slashes, support comma-separated origins)
+const configuredFrontendUrls = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(url => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const defaultProductionOrigins = [
+  'https://lokah-frontend-coral.vercel.app',
+  'https://lokahbuilders.com',
+  'https://www.lokahbuilders.com',
+];
+
+const devOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+];
+
+const allowedOrigins = Array.from(new Set([
+  ...configuredFrontendUrls,
+  ...(process.env.NODE_ENV === 'production' ? defaultProductionOrigins : [...defaultProductionOrigins, ...devOrigins]),
+]));
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Blocked by CORS policy'));
+    // Allow non-browser requests (e.g. mobile apps, curl, server-to-server)
+    if (!origin) {
+      return callback(null, true);
     }
+    const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Blocked by CORS policy: Origin ${origin} not allowed`));
   },
   credentials: true, // Allow JWT HttpOnly secure cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

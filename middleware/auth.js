@@ -31,3 +31,17 @@ export const isAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const optionalVerifyToken = (req, res, next) => {
+  let token = req.cookies?.access_token;
+  if (!token && req.headers.authorization?.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+  if (token) {
+    const decoded = verifyAccessToken(token);
+    if (decoded) {
+      req.admin = decoded;
+    }
+  }
+  next();
+};

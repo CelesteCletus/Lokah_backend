@@ -135,8 +135,8 @@ export const logout = async (req, res, next) => {
       await logActivity(req.admin.id, 'LOGOUT', 'Admin signed out', req);
     }
 
-    res.clearCookie('access_token', authConfig.accessCookieOptions);
-    res.clearCookie('refresh_token', authConfig.cookieOptions);
+    res.clearCookie('access_token', authConfig.clearCookieOptions);
+    res.clearCookie('refresh_token', authConfig.clearCookieOptions);
     res.json({ message: 'Signed out successfully' });
   } catch (err) {
     next(err);
