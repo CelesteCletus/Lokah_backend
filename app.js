@@ -97,6 +97,12 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 // Logging
 app.use(requestLogger);
 
+// Prevent caching for all API endpoints
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Rate Limiter
 // Standard rate limiting for most API traffic. The live-support chat routes
 // (/api/support/*) are exempted here because they're polled every few
