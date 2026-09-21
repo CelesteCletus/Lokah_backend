@@ -9,12 +9,17 @@ const REQUIRED_IN_PRODUCTION = [
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
   'COOKIE_SECRET',
-  'FRONTEND_URL',
   'ADMIN_PASSWORD',
 ];
 
 if (process.env.NODE_ENV === 'production') {
   const missing = REQUIRED_IN_PRODUCTION.filter((key) => !process.env[key] || !process.env[key].trim());
+  const hasFrontendOrigin = (process.env.CORS_ORIGIN && process.env.CORS_ORIGIN.trim()) ||
+                            (process.env.FRONTEND_URL && process.env.FRONTEND_URL.trim());
+
+  if (!hasFrontendOrigin) {
+    missing.push('CORS_ORIGIN (or FRONTEND_URL)');
+  }
 
   if (missing.length > 0) {
     console.error('❌ Cannot start in production: missing required environment variable(s):');
