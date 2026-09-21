@@ -29,14 +29,6 @@ const app = express();
 // Trust reverse proxy (essential for Render, Heroku, Cloudflare to detect HTTPS and client IPs correctly)
 app.set('trust proxy', 1);
 
-// Security Headers (Helmet)
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" } // Required to let front-end load local images
-}));
-
-// Gzip Compression
-app.use(compression());
-
 // CORS configuration supporting cookies credentials exchange
 // Parse CORS_ORIGIN and FRONTEND_URL from environment (comma, whitespace, or semicolon separated)
 const configuredOrigins = [
@@ -95,8 +87,36 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
+// Exactly one cors(corsOptions) call, before helmet and every other middleware
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Explicitly handle preflight for all routes (returns 204 with CORS headers)
+
+// Temporary debug logger: print headers leaving Express for requests with Origin
+app.use((req, res, next) => {
+  if (req.headers.origin) {
+    res.on('finish', () => {
+      console.log(
+        '🔍 [Express Response on finish]',
+        req.method,
+        req.originalUrl,
+        '| Origin:',
+        JSON.stringify(req.headers.origin),
+        '| Status:',
+        res.statusCode,
+        '| Headers leaving Express:',
+        JSON.stringify(res.getHeaders())
+      );
+    });
+  }
+  next();
+});
+
+// Security Headers (Helmet)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Required to let front-end load local images
+}));
+
+// Gzip Compression
+app.use(compression());
 
 // Request parsers
 app.use(express.json());
