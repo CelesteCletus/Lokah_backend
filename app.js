@@ -59,6 +59,10 @@ const allowedOrigins = Array.from(new Set([
   ...(process.env.NODE_ENV === 'production' ? [] : devOrigins),
 ]));
 
+// Startup logging: print env vars with JSON.stringify to reveal any hidden whitespace or quotes
+console.log('🔍 [CORS Startup] process.env.CORS_ORIGIN:', JSON.stringify(process.env.CORS_ORIGIN));
+console.log('🔍 [CORS Startup] process.env.FRONTEND_URL:', JSON.stringify(process.env.FRONTEND_URL));
+
 // Log allowed origins once at backend startup for deployment confirmation
 if (allowedOrigins.length === 0) {
   console.warn('⚠️  [CORS Warning] No allowed origins configured! Set CORS_ORIGIN or FRONTEND_URL in environment.');
@@ -70,12 +74,16 @@ const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests (e.g. mobile apps, curl, server-to-server health checks)
     if (!origin) {
+      console.log('🔍 [CORS Request] Incoming Origin: (none/server-to-server) | AllowedOrigins:', allowedOrigins, '| Matched: true');
       return callback(null, true);
     }
     const normalizedOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
     const isAllowed = allowedOrigins.some(
       allowed => allowed.trim().replace(/\/+$/, '').toLowerCase() === normalizedOrigin
     );
+
+    console.log('🔍 [CORS Request] Incoming Origin:', JSON.stringify(origin), '| AllowedOrigins:', allowedOrigins, '| Matched:', isAllowed);
+
     if (isAllowed) {
       return callback(null, true);
     }
