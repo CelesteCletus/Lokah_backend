@@ -179,6 +179,111 @@ const createTables = async () => {
   }
 };
 
+const runMigrations = async () => {
+  try {
+    // 1. Ensure stored_media table exists for persistent in-database media storage
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS stored_media (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          filename VARCHAR(255) UNIQUE NOT NULL,
+          original_name VARCHAR(255),
+          mime_type VARCHAR(100),
+          file_data LONGBLOB NOT NULL,
+          size INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB;
+    `);
+
+    // Backfill any local files from public/uploads to MySQL stored_media if not already present
+    try {
+      const rootDir = path.resolve();
+      const subfolders = ['properties', 'blogs', 'brochures', 'resumes'];
+      for (const sub of subfolders) {
+        const folderPath = path.join(rootDir, 'public', 'uploads', sub);
+        if (fs.existsSync(folderPath)) {
+          const files = fs.readdirSync(folderPath);
+          for (const file of files) {
+            const filePath = path.join(folderPath, file);
+            if (fs.statSync(filePath).isFile()) {
+              const ext = path.extname(file).toLowerCase();
+              let mime = 'image/jpeg';
+              if (ext === '.png') mime = 'image/png';
+              else if (ext === '.webp') mime = 'image/webp';
+              else if (ext === '.pdf') mime = 'application/pdf';
+
+              const buffer = fs.readFileSync(filePath);
+              const pool = getPool();
+              if (pool) {
+                await pool.query(
+                  `INSERT IGNORE INTO stored_media (filename, original_name, mime_type, file_data, size)
+                   VALUES (?, ?, ?, ?, ?)`,
+                  [file, file, mime, buffer, buffer.length]
+                );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Media backfill check info:', e.message);
+    }
+
+    // 2. Check if hero_image column exists on properties table
+    const columns = await db.all("SHOW COLUMNS FROM properties LIKE 'hero_image'");
+    if (!columns || columns.length === 0) {
+      console.log('🔄 Migrating database: Adding hero_image column to properties table...');
+      await db.run("ALTER TABLE properties ADD COLUMN hero_image TEXT NULL AFTER status");
+      console.log('✅ Added hero_image column to properties table.');
+    }
+
+    // Always ensure existing properties have hero_image populated and removed from images array
+    try {
+      const rows = await db.all("SELECT id, hero_image, images FROM properties");
+      for (const row of rows) {
+        let imgs = [];
+        if (row.images) {
+          try {
+            imgs = typeof row.images === 'string' ? JSON.parse(row.images) : row.images;
+            if (!Array.isArray(imgs)) imgs = [];
+          } catch (e) {
+            imgs = [];
+          }
+        }
+
+        let hero = row.hero_image && row.hero_image.trim() ? row.hero_image.trim() : null;
+        let needsUpdate = false;
+
+        if (!hero && imgs.length > 0 && imgs[0]) {
+          hero = imgs[0];
+          needsUpdate = true;
+        }
+
+        // Clean hero out of images array
+        if (hero) {
+          const normHero = hero.includes('/uploads/') ? hero.substring(hero.indexOf('/uploads/')) : hero;
+          const cleaned = imgs.filter(img => {
+            const normImg = typeof img === 'string' && img.includes('/uploads/') ? img.substring(img.indexOf('/uploads/')) : img;
+            return normImg !== normHero;
+          });
+          if (cleaned.length !== imgs.length) {
+            imgs = cleaned;
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
+          await db.run("UPDATE properties SET hero_image = ?, images = ? WHERE id = ?", [hero, JSON.stringify(imgs), row.id]);
+        }
+      }
+      console.log('✅ Sanitized and backfilled hero_image and gallery for all properties.');
+    } catch (e) {
+      console.warn('⚠️ Property migration backfill info:', e.message);
+    }
+  } catch (err) {
+    console.warn('⚠️ Migration check info:', err.message);
+  }
+};
+
 const seedAdmin = async () => {
   const existing = await db.get('SELECT id FROM admins LIMIT 1');
   if (!existing) {
@@ -211,6 +316,7 @@ export const testConnection = async () => {
     console.log(`✅ Connected to Cloud MySQL database server at ${targetHost}${targetPort ? ':' + targetPort : ''} (SSL Encrypted).`);
 
     await createTables();
+    await runMigrations();
     await seedAdmin();
     console.log(`✅ Cloud MySQL database ready and online.`);
     return true;

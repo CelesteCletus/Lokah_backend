@@ -1,7 +1,7 @@
 import express from 'express';
 import * as propertyController from '../controllers/propertyController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
-import { uploadProperties } from '../middleware/upload.js';
+import { uploadProperties, persistUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -20,6 +20,7 @@ router.post(
     { name: 'brochure', maxCount: 1 },
     { name: 'floorPlan', maxCount: 1 }
   ]),
+  persistUploadedFiles,
   propertyController.createProperty
 );
 
@@ -33,6 +34,7 @@ router.put(
     { name: 'brochure', maxCount: 1 },
     { name: 'floorPlan', maxCount: 1 }
   ]),
+  persistUploadedFiles,
   propertyController.updateProperty
 );
 

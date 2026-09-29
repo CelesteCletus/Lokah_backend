@@ -1,7 +1,7 @@
 import express from 'express';
 import * as blogController from '../controllers/blogController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
-import { uploadBlogs } from '../middleware/upload.js';
+import { uploadBlogs, persistUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -19,6 +19,7 @@ router.post(
     { name: 'pdfAttachment', maxCount: 1 },
     { name: 'gallery', maxCount: 10 }
   ]),
+  persistUploadedFiles,
   blogController.createBlog
 );
 
@@ -31,6 +32,7 @@ router.put(
     { name: 'pdfAttachment', maxCount: 1 },
     { name: 'gallery', maxCount: 10 }
   ]),
+  persistUploadedFiles,
   blogController.updateBlog
 );
 

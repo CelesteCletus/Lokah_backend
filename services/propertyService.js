@@ -3,10 +3,27 @@ import { slugify, parseCleanArray, mysqlNow } from '../utils/helpers.js';
 
 const now = () => mysqlNow();
 
+const normalizeUrlPath = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  const idx = trimmed.indexOf('/uploads/');
+  return idx !== -1 ? trimmed.substring(idx) : trimmed;
+};
+
 const formatRow = (r) => {
   if (!r) return null;
-  const images = parseCleanArray(r.images);
-  const heroImage = images.length > 0 ? images[0] : (r.hero_image || r.heroImage || null);
+  const allImages = parseCleanArray(r.images);
+  // Hero image priority: dedicated r.hero_image, then fallback to first image in allImages, or r.heroImage
+  const heroImage = (r.hero_image && typeof r.hero_image === 'string' && r.hero_image.trim())
+    ? r.hero_image.trim()
+    : (allImages.length > 0 ? allImages[0] : (r.heroImage || null));
+
+  // Gallery: strictly separate from hero image so gallery never duplicates the hero banner
+  const normHero = normalizeUrlPath(heroImage);
+  const galleryImages = normHero
+    ? allImages.filter(img => normalizeUrlPath(img) !== normHero)
+    : allImages;
+
   const cleanFeatures = parseCleanArray(r.features);
   
   return {
@@ -22,7 +39,13 @@ const formatRow = (r) => {
     hero_image: heroImage,
     heroImage: heroImage,
     featured_image: heroImage,
-    images: images.length > 0 ? images : (heroImage ? [heroImage] : []),
+    image: heroImage,
+    images: galleryImages,
+    gallery: galleryImages,
+    floorPlan: r.floor_plan || null,
+    floor_plan: r.floor_plan || null,
+    brochurePdf: r.brochure || null,
+    brochure: r.brochure || null,
     features: cleanFeatures,
     amenities: cleanFeatures,
     tagline: r.tagline || '',
@@ -76,19 +99,24 @@ export const createProperty = async (data) => {
   const name = data.name || data.title || 'Untitled Property';
   const type = data.type || data.category || 'Villa';
 
-  let galleryArray = parseCleanArray(data.images || data.gallery);
+  const heroImage = data.heroImage || data.hero_image || data.image || null;
 
-  if (data.heroImage && !galleryArray.includes(data.heroImage)) {
-    galleryArray.unshift(data.heroImage);
+  // Gallery holds ONLY gallery images (do not inject heroImage into gallery!)
+  const existingImages = parseCleanArray(data.images);
+  const uploadedGallery = parseCleanArray(data.gallery);
+  let galleryArray = Array.from(new Set([...existingImages, ...uploadedGallery]));
+  const normHero = normalizeUrlPath(heroImage);
+  if (normHero) {
+    galleryArray = galleryArray.filter(img => normalizeUrlPath(img) !== normHero);
   }
 
   const cleanAmenities = parseCleanArray(data.features || data.amenities);
 
   const result = await db.run(
-    `INSERT INTO properties (name, location, area, price, price_label, type, status, description, features,
+    `INSERT INTO properties (name, location, area, price, price_label, type, status, hero_image, description, features,
       images, floor_plan, brochure, bhk, sq_ft, featured, publish_status, seo_title, seo_description, video_url, tagline, story,
       land_area, virtual_tour_link, coordinates, nearby, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       name,
       data.location || '',
@@ -97,6 +125,7 @@ export const createProperty = async (data) => {
       data.priceLabel || data.price_label || data.priceDisplay || '',
       type,
       data.status || 'Ongoing',
+      heroImage,
       data.description || '',
       JSON.stringify(cleanAmenities),
       JSON.stringify(galleryArray),
@@ -129,17 +158,53 @@ export const updateProperty = async (id, data) => {
   const name = data.name || data.title || existing.name;
   const type = data.type || data.category || existing.type;
 
-  let galleryArray = parseCleanArray(data.images || data.gallery || existing.images);
+  // Resolve hero image
+  let heroImage = existing.hero_image;
+  if (data.heroImage !== undefined) {
+    heroImage = data.heroImage || null;
+  } else if (data.hero_image !== undefined) {
+    heroImage = data.hero_image || null;
+  } else if (data.image !== undefined) {
+    heroImage = data.image || null;
+  }
 
-  if (data.heroImage && !galleryArray.includes(data.heroImage)) {
-    galleryArray.unshift(data.heroImage);
+  // Gallery array
+  let galleryArray = [];
+  if (data.gallery !== undefined || data.images !== undefined) {
+    const existingImages = parseCleanArray(data.images !== undefined ? data.images : []);
+    const uploadedGallery = parseCleanArray(data.gallery !== undefined ? data.gallery : []);
+    galleryArray = Array.from(new Set([...existingImages, ...uploadedGallery]));
+  } else {
+    galleryArray = parseCleanArray(existing.images);
+  }
+
+  // Exclude hero image from gallery array to prevent contamination
+  const normHero = normalizeUrlPath(heroImage);
+  if (normHero) {
+    galleryArray = galleryArray.filter(img => normalizeUrlPath(img) !== normHero);
+  }
+
+  // Floor plan: support explicit clearing if passed as empty string
+  let floorPlan = existing.floor_plan;
+  if (data.floorPlan !== undefined) {
+    floorPlan = data.floorPlan ? data.floorPlan : null;
+  } else if (data.floor_plan !== undefined) {
+    floorPlan = data.floor_plan ? data.floor_plan : null;
+  }
+
+  // Brochure: support explicit clearing if passed as empty string
+  let brochure = existing.brochure;
+  if (data.brochure !== undefined) {
+    brochure = data.brochure ? data.brochure : null;
+  } else if (data.brochurePdf !== undefined) {
+    brochure = data.brochurePdf ? data.brochurePdf : null;
   }
 
   const cleanAmenities = parseCleanArray(data.features || data.amenities || existing.features);
 
   await db.run(
     `UPDATE properties SET
-      name = ?, location = ?, area = ?, price = ?, price_label = ?, type = ?, status = ?,
+      name = ?, location = ?, area = ?, price = ?, price_label = ?, type = ?, status = ?, hero_image = ?,
       description = ?, features = ?, images = ?, floor_plan = ?, brochure = ?, bhk = ?, sq_ft = ?,
       featured = ?, publish_status = ?, seo_title = ?, seo_description = ?, video_url = ?, tagline = ?, story = ?,
       land_area = ?, virtual_tour_link = ?, coordinates = ?, nearby = ?, updated_at = ?
@@ -152,11 +217,12 @@ export const updateProperty = async (id, data) => {
       data.priceLabel || data.price_label || data.priceDisplay || existing.price_label,
       type,
       data.status || existing.status,
+      heroImage,
       data.description ?? existing.description,
       JSON.stringify(cleanAmenities),
       JSON.stringify(galleryArray),
-      data.floorPlan || data.floor_plan || existing.floor_plan,
-      data.brochure || data.brochurePdf || existing.brochure,
+      floorPlan,
+      brochure,
       data.bhk ?? existing.bhk,
       data.sqFt || data.sq_ft || data.sqft || existing.sq_ft,
       (data.featured !== undefined ? data.featured : existing.featured) ? 1 : 0,

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS properties (
     price_label VARCHAR(100),
     type VARCHAR(100),
     status VARCHAR(50) DEFAULT 'available',
+    hero_image TEXT,
     description TEXT,
     features TEXT,
     images TEXT,
@@ -191,3 +192,14 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS stored_media (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    original_name VARCHAR(255),
+    mime_type VARCHAR(100),
+    file_data LONGBLOB NOT NULL,
+    size INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+

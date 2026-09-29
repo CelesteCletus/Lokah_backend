@@ -21,6 +21,7 @@ import dashboardRouter from './routes/dashboard.js';
 import supportRouter from './routes/support.js';
 
 import { getDb } from './config/db.js';
+import { serveMediaFromDb } from './utils/mediaStore.js';
 
 dotenv.config();
 
@@ -143,9 +144,10 @@ app.use('/api/', (req, res, next) => {
   return generalLimiter(req, res, next);
 });
 
-// Serve uploads folder statically
+// Serve uploads: first check static disk cache, then fallback to MySQL database if missing
 const rootDir = path.resolve();
 app.use('/uploads', express.static(path.join(rootDir, 'public', 'uploads')));
+app.use('/uploads', serveMediaFromDb);
 
 // Root route — so platform health checks hitting "/" get a 200 instead of a 404
 app.get('/', (req, res) => {

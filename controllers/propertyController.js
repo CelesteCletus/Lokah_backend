@@ -28,31 +28,26 @@ export const getPropertyById = async (req, res, next) => {
   }
 };
 
+const getUploadedFileUrl = (file, folder = 'properties') => {
+  if (!file) return null;
+  if (file.path && (file.path.startsWith('http://') || file.path.startsWith('https://'))) {
+    return file.path;
+  }
+  if (file.secure_url) return file.secure_url;
+  if (file.location) return file.location;
+  return `/uploads/${folder}/${file.filename}`;
+};
+
 export const createProperty = async (req, res, next) => {
   try {
     const data = { ...req.body };
 
-    // Handle files if uploaded via multipart/form-data
-    if (req.files) {
-      if (req.files.heroImage && req.files.heroImage[0]) {
-        data.heroImage = `/uploads/properties/${req.files.heroImage[0].filename}`;
-      }
-      if (req.files.gallery) {
-        const galleryUrls = req.files.gallery.map(f => `/uploads/properties/${f.filename}`);
-        // If data.gallery is sent as string/JSON, combine or override
-        data.gallery = galleryUrls;
-      }
-      if (req.files.brochure && req.files.brochure[0]) {
-        data.brochurePdf = `/uploads/properties/${req.files.brochure[0].filename}`;
-      }
-      if (req.files.floorPlan && req.files.floorPlan[0]) {
-        data.floorPlan = `/uploads/properties/${req.files.floorPlan[0].filename}`;
-      }
-    }
-
-    // Parse array/JSON fields if sent as strings (common in multipart)
+    // Parse array/JSON fields if sent as strings (common in multipart/form-data)
     if (typeof data.amenities === 'string') {
       try { data.amenities = JSON.parse(data.amenities); } catch (e) { data.amenities = data.amenities.split(',').map(a => a.trim()); }
+    }
+    if (typeof data.features === 'string') {
+      try { data.features = JSON.parse(data.features); } catch (e) { data.features = data.features.split(',').map(a => a.trim()); }
     }
     if (typeof data.coordinates === 'string') {
       try { data.coordinates = JSON.parse(data.coordinates); } catch (e) {}
@@ -60,8 +55,35 @@ export const createProperty = async (req, res, next) => {
     if (typeof data.nearby === 'string') {
       try { data.nearby = JSON.parse(data.nearby); } catch (e) {}
     }
-    if (typeof data.gallery === 'string') {
-      try { data.gallery = JSON.parse(data.gallery); } catch (e) { data.gallery = data.gallery.split(',').map(g => g.trim()); }
+
+    // Existing gallery items sent as JSON string or array
+    let remoteGallery = [];
+    const rawGallery = data.gallery || data.images;
+    if (typeof rawGallery === 'string') {
+      try { remoteGallery = JSON.parse(rawGallery); } catch (e) { remoteGallery = rawGallery.split(',').map(g => g.trim()); }
+    } else if (Array.isArray(rawGallery)) {
+      remoteGallery = rawGallery;
+    }
+
+    // Handle files if uploaded via multipart/form-data
+    if (req.files) {
+      if (req.files.heroImage && req.files.heroImage[0]) {
+        data.heroImage = getUploadedFileUrl(req.files.heroImage[0], 'properties');
+      }
+      if (req.files.gallery && req.files.gallery.length > 0) {
+        const newUrls = req.files.gallery.map(f => getUploadedFileUrl(f, 'properties')).filter(Boolean);
+        data.gallery = Array.from(new Set([...remoteGallery, ...newUrls]));
+      } else {
+        data.gallery = remoteGallery;
+      }
+      if (req.files.brochure && req.files.brochure[0]) {
+        data.brochurePdf = getUploadedFileUrl(req.files.brochure[0], 'properties');
+      }
+      if (req.files.floorPlan && req.files.floorPlan[0]) {
+        data.floorPlan = getUploadedFileUrl(req.files.floorPlan[0], 'properties');
+      }
+    } else {
+      data.gallery = remoteGallery;
     }
 
     const newProperty = await propertyService.createProperty(data);
@@ -79,25 +101,12 @@ export const updateProperty = async (req, res, next) => {
     const data = { ...req.body };
     const propId = parseInt(id, 10);
 
-    // Handle uploaded files
-    if (req.files) {
-      if (req.files.heroImage && req.files.heroImage[0]) {
-        data.heroImage = `/uploads/properties/${req.files.heroImage[0].filename}`;
-      }
-      if (req.files.gallery) {
-        data.gallery = req.files.gallery.map(f => `/uploads/properties/${f.filename}`);
-      }
-      if (req.files.brochure && req.files.brochure[0]) {
-        data.brochurePdf = `/uploads/properties/${req.files.brochure[0].filename}`;
-      }
-      if (req.files.floorPlan && req.files.floorPlan[0]) {
-        data.floorPlan = `/uploads/properties/${req.files.floorPlan[0].filename}`;
-      }
-    }
-
     // Parse array/JSON strings if necessary
     if (typeof data.amenities === 'string') {
       try { data.amenities = JSON.parse(data.amenities); } catch (e) { data.amenities = data.amenities.split(',').map(a => a.trim()); }
+    }
+    if (typeof data.features === 'string') {
+      try { data.features = JSON.parse(data.features); } catch (e) { data.features = data.features.split(',').map(a => a.trim()); }
     }
     if (typeof data.coordinates === 'string') {
       try { data.coordinates = JSON.parse(data.coordinates); } catch (e) {}
@@ -105,8 +114,35 @@ export const updateProperty = async (req, res, next) => {
     if (typeof data.nearby === 'string') {
       try { data.nearby = JSON.parse(data.nearby); } catch (e) {}
     }
-    if (typeof data.gallery === 'string') {
-      try { data.gallery = JSON.parse(data.gallery); } catch (e) { data.gallery = data.gallery.split(',').map(g => g.trim()); }
+
+    // Existing gallery items sent as JSON string or array
+    let remoteGallery = [];
+    const rawGallery = data.gallery !== undefined ? data.gallery : data.images;
+    if (typeof rawGallery === 'string') {
+      try { remoteGallery = JSON.parse(rawGallery); } catch (e) { remoteGallery = rawGallery.split(',').map(g => g.trim()); }
+    } else if (Array.isArray(rawGallery)) {
+      remoteGallery = rawGallery;
+    }
+
+    // Handle uploaded files
+    if (req.files) {
+      if (req.files.heroImage && req.files.heroImage[0]) {
+        data.heroImage = getUploadedFileUrl(req.files.heroImage[0], 'properties');
+      }
+      if (req.files.gallery && req.files.gallery.length > 0) {
+        const newUrls = req.files.gallery.map(f => getUploadedFileUrl(f, 'properties')).filter(Boolean);
+        data.gallery = Array.from(new Set([...remoteGallery, ...newUrls]));
+      } else if (rawGallery !== undefined) {
+        data.gallery = remoteGallery;
+      }
+      if (req.files.brochure && req.files.brochure[0]) {
+        data.brochurePdf = getUploadedFileUrl(req.files.brochure[0], 'properties');
+      }
+      if (req.files.floorPlan && req.files.floorPlan[0]) {
+        data.floorPlan = getUploadedFileUrl(req.files.floorPlan[0], 'properties');
+      }
+    } else if (rawGallery !== undefined) {
+      data.gallery = remoteGallery;
     }
 
     const updated = await propertyService.updateProperty(propId, data);

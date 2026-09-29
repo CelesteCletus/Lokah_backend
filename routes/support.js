@@ -12,15 +12,37 @@ const router = express.Router();
 const PRESENCE_TIMEOUT_SECONDS = 90;
 
 async function isAnyAgentOnline(db) {
-  const cutoff = new Date(Date.now() - PRESENCE_TIMEOUT_SECONDS * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .slice(0, 19);
-  const row = await db.get(
-    `SELECT id FROM agent_presence WHERE is_online = true AND last_seen >= ? LIMIT 1`,
-    [cutoff]
-  );
-  return !!row;
+  try {
+    if (db.type === 'mysql') {
+      const row = await db.get(
+        `SELECT id FROM agent_presence WHERE (is_online = 1 OR is_online = true) AND last_seen >= DATE_SUB(NOW(), INTERVAL ? SECOND) LIMIT 1`,
+        [PRESENCE_TIMEOUT_SECONDS]
+      );
+      if (row) return true;
+    } else {
+      const row = await db.get(
+        `SELECT id FROM agent_presence WHERE (is_online = 1 OR is_online = true) AND last_seen >= datetime('now', '-' || ? || ' seconds') LIMIT 1`,
+        [PRESENCE_TIMEOUT_SECONDS]
+      );
+      if (row) return true;
+    }
+  } catch (err) {
+    // Proceed to fallback
+  }
+
+  try {
+    const cutoff = new Date(Date.now() - PRESENCE_TIMEOUT_SECONDS * 1000)
+      .toISOString()
+      .replace('T', ' ')
+      .slice(0, 19);
+    const row = await db.get(
+      `SELECT id FROM agent_presence WHERE (is_online = 1 OR is_online = true) AND last_seen >= ? LIMIT 1`,
+      [cutoff]
+    );
+    return !!row;
+  } catch {
+    return false;
+  }
 }
 
 // ── Public Visitor Routes ──────────────────────────────────────────────────
@@ -161,12 +183,12 @@ router.post('/heartbeat', verifyToken, async (req, res) => {
     const existing = await db.get('SELECT id FROM agent_presence WHERE admin_email = ?', [email]);
     if (existing) {
       await db.run(
-        `UPDATE agent_presence SET last_seen = NOW(), is_online = true WHERE admin_email = ?`,
+        `UPDATE agent_presence SET last_seen = NOW(), is_online = 1 WHERE admin_email = ?`,
         [email]
       );
     } else {
       await db.run(
-        `INSERT INTO agent_presence (admin_email, is_online) VALUES (?, true)`,
+        `INSERT INTO agent_presence (admin_email, is_online, last_seen) VALUES (?, 1, NOW())`,
         [email]
       );
     }
@@ -181,7 +203,7 @@ router.post('/agent-offline', verifyToken, async (req, res) => {
   try {
     const db = await getDb();
     const email = req.admin?.email;
-    await db.run(`UPDATE agent_presence SET is_online = false WHERE admin_email = ?`, [email]);
+    await db.run(`UPDATE agent_presence SET is_online = 0 WHERE admin_email = ?`, [email]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update presence.' });
