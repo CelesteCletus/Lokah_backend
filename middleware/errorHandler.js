@@ -13,5 +13,11 @@ export const errorHandler = (err, req, res, next) => {
 
 // Catch-all 404 handler
 export const notFoundHandler = (req, res, next) => {
+  // Prevent edge proxies (Cloudflare, GoDaddy Airo) from caching missing /uploads/* responses
+  if (req.originalUrl && req.originalUrl.startsWith('/uploads/')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   res.status(404).json({ error: `Not Found: ${req.originalUrl}` });
 };

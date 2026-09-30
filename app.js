@@ -41,43 +41,69 @@ const configuredOrigins = [
   .map(url => url.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
-const devOrigins = [
+const defaultOrigins = [
+  'https://lokahbuilders.com',
+  'https://www.lokahbuilders.com',
+  'http://lokahbuilders.com',
+  'http://www.lokahbuilders.com',
+  'https://lokah-frontend-coral.vercel.app',
+  'https://xzw5gqcr6f.c35.airoapp.ai',
+  'https://6qxwqtx3i8.c40.airoapp.ai',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
 ];
 
 const allowedOrigins = Array.from(new Set([
+  ...defaultOrigins,
   ...configuredOrigins,
-  ...(process.env.NODE_ENV === 'production' ? [] : devOrigins),
 ]));
 
 // Startup logging: print env vars with JSON.stringify to reveal any hidden whitespace or quotes
 console.log('🔍 [CORS Startup] process.env.CORS_ORIGIN:', JSON.stringify(process.env.CORS_ORIGIN));
 console.log('🔍 [CORS Startup] process.env.FRONTEND_URL:', JSON.stringify(process.env.FRONTEND_URL));
+console.log('🔒 [CORS] Allowed Origins:', allowedOrigins);
 
-// Log allowed origins once at backend startup for deployment confirmation
-if (allowedOrigins.length === 0) {
-  console.warn('⚠️  [CORS Warning] No allowed origins configured! Set CORS_ORIGIN or FRONTEND_URL in environment.');
-} else {
-  console.log('🔒 [CORS] Allowed Origins:', allowedOrigins);
-}
+const isOriginPermitted = (origin) => {
+  if (!origin) return true;
+  const normalizedOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
+
+  // Check explicit list
+  if (allowedOrigins.some(allowed => allowed.trim().replace(/\/+$/, '').toLowerCase() === normalizedOrigin)) {
+    return true;
+  }
+
+  // Dynamic hostname matching
+  try {
+    const { hostname } = new URL(normalizedOrigin);
+    if (
+      hostname === 'lokahbuilders.com' ||
+      hostname.endsWith('.lokahbuilders.com') ||
+      hostname.endsWith('.airoapp.ai') ||
+      hostname.endsWith('.vercel.app') ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1'
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore URL parse errors
+  }
+
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests (e.g. mobile apps, curl, server-to-server health checks)
     if (!origin) {
-      console.log('🔍 [CORS Request] Incoming Origin: (none/server-to-server) | AllowedOrigins:', allowedOrigins, '| Matched: true');
       return callback(null, true);
     }
-    const normalizedOrigin = origin.trim().replace(/\/+$/, '').toLowerCase();
-    const isAllowed = allowedOrigins.some(
-      allowed => allowed.trim().replace(/\/+$/, '').toLowerCase() === normalizedOrigin
-    );
 
-    console.log('🔍 [CORS Request] Incoming Origin:', JSON.stringify(origin), '| AllowedOrigins:', allowedOrigins, '| Matched:', isAllowed);
+    const permitted = isOriginPermitted(origin);
+    console.log('🔍 [CORS Request] Incoming Origin:', JSON.stringify(origin), '| Matched:', permitted);
 
-    if (isAllowed) {
+    if (permitted) {
       return callback(null, true);
     }
     return callback(null, false);
@@ -90,6 +116,7 @@ const corsOptions = {
 
 // Exactly one cors(corsOptions) call, before helmet and every other middleware
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Temporary debug logger: print headers leaving Express for requests with Origin
 app.use((req, res, next) => {

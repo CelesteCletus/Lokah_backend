@@ -104,45 +104,73 @@ export const uploadResumes = multer({
  * If Cloudinary is also configured, it can also mirror to Cloudinary.
  */
 export const persistUploadedFiles = async (req, res, next) => {
-  if (!req.files) {
+  // Support both req.files (from upload.fields/array) and req.file (from upload.single)
+  if (!req.files && !req.file) {
+    return next();
+  }
+
+  // Collect all uploaded file objects into a single flat array
+  const filesToPersist = [];
+  if (req.file) {
+    filesToPersist.push(req.file);
+  }
+  if (req.files) {
+    if (Array.isArray(req.files)) {
+      filesToPersist.push(...req.files);
+    } else if (typeof req.files === 'object') {
+      for (const field of Object.keys(req.files)) {
+        const fileList = req.files[field];
+        if (Array.isArray(fileList)) {
+          filesToPersist.push(...fileList);
+        } else if (fileList) {
+          filesToPersist.push(fileList);
+        }
+      }
+    }
+  }
+
+  if (filesToPersist.length === 0) {
     return next();
   }
 
   try {
-    const fileFields = Object.keys(req.files);
-    for (const field of fileFields) {
-      const fileList = req.files[field];
-      if (Array.isArray(fileList)) {
-        for (const file of fileList) {
-          if (file.path && fs.existsSync(file.path)) {
-            const buffer = fs.readFileSync(file.path);
-            
-            // Save permanently into MySQL database
-            await saveMediaToDb({
-              filename: file.filename,
-              originalName: file.originalname,
-              mimeType: file.mimetype,
-              buffer,
-              size: file.size,
-            });
+    for (const file of filesToPersist) {
+      if (file.path && fs.existsSync(file.path)) {
+        const buffer = fs.readFileSync(file.path);
+        
+        // Save permanently into MySQL database (throws on failure)
+        await saveMediaToDb({
+          filename: file.filename,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          buffer,
+          size: file.size,
+        });
 
-            // Optional: If Cloudinary is configured, mirror to Cloudinary CDN
-            if (isCloudinaryConfigured()) {
-              const folder = `lokah_builders/${field}`;
-              const cloudUrl = await uploadToCloudinary(file.path, folder);
-              if (cloudUrl) {
-                file.path = cloudUrl;
-                file.secure_url = cloudUrl;
-              }
-            }
+        // Optional: If Cloudinary is configured, mirror to Cloudinary CDN
+        if (isCloudinaryConfigured()) {
+          const field = file.fieldname || 'media';
+          const folder = `lokah_builders/${field}`;
+          const cloudUrl = await uploadToCloudinary(file.path, folder);
+          if (cloudUrl) {
+            file.path = cloudUrl;
+            file.secure_url = cloudUrl;
           }
         }
       }
     }
+    next();
   } catch (err) {
-    console.error('Error persisting files to database:', err);
+    console.error('❌ Failed to persist uploaded file to permanent storage:', err);
+    // Cleanup temporary files on disk to prevent leaving orphan ghost files
+    for (const file of filesToPersist) {
+      if (file.path && fs.existsSync(file.path)) {
+        try { fs.unlinkSync(file.path); } catch (_) {}
+      }
+    }
+    const uploadErr = new Error(`Media persistence failure: ${err.message || 'Could not save file to permanent database storage.'}`);
+    uploadErr.statusCode = 500;
+    return next(uploadErr);
   }
-
-  next();
 };
 

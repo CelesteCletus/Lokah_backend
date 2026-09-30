@@ -14,9 +14,19 @@ import { getPool } from '../config/db.js';
  * @returns {Promise<boolean>}
  */
 export const saveMediaToDb = async ({ filename, originalName, mimeType, buffer, size }) => {
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`Cannot persist empty media buffer for "${filename}".`);
+  }
+
+  const pool = getPool();
+  if (!pool) {
+    const err = new Error('Database connection pool is not available for media persistence.');
+    err.code = 'DB_UNAVAILABLE';
+    console.error(`❌ Failed to save ${filename} to MySQL stored_media:`, err.message);
+    throw err;
+  }
+
   try {
-    const pool = getPool();
-    if (!pool) return false;
     await pool.query(
       `INSERT INTO stored_media (filename, original_name, mime_type, file_data, size)
        VALUES (?, ?, ?, ?, ?)
@@ -27,7 +37,7 @@ export const saveMediaToDb = async ({ filename, originalName, mimeType, buffer, 
     return true;
   } catch (err) {
     console.error(`❌ Failed to save ${filename} to MySQL stored_media:`, err.message);
-    return false;
+    throw err;
   }
 };
 
@@ -65,6 +75,9 @@ export const serveMediaFromDb = async (req, res, next) => {
 
   const media = await getMediaFromDb(filename);
   if (!media || !media.file_data) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return next();
   }
 

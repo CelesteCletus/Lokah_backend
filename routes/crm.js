@@ -2,7 +2,7 @@ import express from 'express';
 import * as crmController from '../controllers/crmController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
 import { formLimiter } from '../middleware/rateLimiter.js';
-import { uploadBrochures } from '../middleware/upload.js';
+import { uploadBrochures, persistUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -32,6 +32,7 @@ router.post(
   verifyToken,
   isAdmin,
   uploadBrochures.single('brochureFile'),
+  persistUploadedFiles,
   crmController.uploadBrochure
 );
 

@@ -2,7 +2,7 @@ import express from 'express';
 import * as careerController from '../controllers/careerController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
 import { formLimiter } from '../middleware/rateLimiter.js';
-import { uploadResumes } from '../middleware/upload.js';
+import { uploadResumes, persistUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -17,6 +17,7 @@ router.post(
   '/applications',
   formLimiter,
   uploadResumes.single('resume'),
+  persistUploadedFiles,
   careerController.createApplication
 );
 router.get('/applications', verifyToken, isAdmin, careerController.getApplications);
