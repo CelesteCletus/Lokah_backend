@@ -68,7 +68,18 @@ export const getMediaFromDb = async (filename) => {
  * whenever a file is not found on the local container disk.
  */
 export const serveMediaFromDb = async (req, res, next) => {
-  const filename = path.basename(req.path);
+  let cleanPath = req.path || '';
+  if (cleanPath.includes('?')) {
+    cleanPath = cleanPath.split('?')[0];
+  }
+  let rawFilename = path.basename(cleanPath);
+  let filename = rawFilename;
+  try {
+    filename = decodeURIComponent(rawFilename);
+  } catch (_) {
+    filename = rawFilename;
+  }
+
   if (!filename || filename === '.' || !filename.includes('.')) {
     return next();
   }
@@ -81,8 +92,11 @@ export const serveMediaFromDb = async (req, res, next) => {
     return next();
   }
 
-  // Set proper caching, content-type, and proof-of-persistence headers
+  // Set proper caching, content-type, content-length, and proof-of-persistence headers
   res.setHeader('Content-Type', media.mime_type || 'application/octet-stream');
+  if (media.file_data && media.file_data.length) {
+    res.setHeader('Content-Length', media.file_data.length);
+  }
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   res.setHeader('X-Served-By', 'MySQL-Database');
   res.setHeader('X-Media-Persistence', 'Permanent-MySQL');
@@ -90,7 +104,8 @@ export const serveMediaFromDb = async (req, res, next) => {
   // Re-populate the local container disk cache so subsequent requests in this session are instant
   try {
     const rootDir = path.resolve();
-    const fullDiskPath = path.join(rootDir, 'public', 'uploads', req.path.replace(/^\/uploads\/?/, ''));
+    const cleanRel = cleanPath.replace(/^\/uploads\/?/, '').replace(/^\/+/, '');
+    const fullDiskPath = path.join(rootDir, 'public', 'uploads', cleanRel);
     const dir = path.dirname(fullDiskPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

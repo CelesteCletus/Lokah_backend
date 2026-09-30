@@ -93,13 +93,28 @@ export const getPropertyBySlug = async (slug) => {
   return formatRow(match);
 };
 
+const isPlaceholderUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  return (
+    trimmed.includes('/images/hero/projects-hero.jpg') ||
+    trimmed.includes('/images/hero/home-hero.jpg') ||
+    trimmed.includes('/images/hero/about-hero.jpg') ||
+    trimmed.includes('/images/hero/services-hero.jpg') ||
+    trimmed.includes('/images/projects/completed-')
+  );
+};
+
 export const createProperty = async (data) => {
   const db = await getDb();
 
   const name = data.name || data.title || 'Untitled Property';
   const type = data.type || data.category || 'Villa';
 
-  const heroImage = data.heroImage || data.hero_image || data.image || null;
+  let heroImage = data.heroImage || data.hero_image || data.image || null;
+  if (isPlaceholderUrl(heroImage)) {
+    heroImage = null; // Strictly avoid saving placeholder into canonical database column
+  }
 
   // Gallery holds ONLY gallery images (do not inject heroImage into gallery!)
   const existingImages = parseCleanArray(data.images);
@@ -158,14 +173,20 @@ export const updateProperty = async (id, data) => {
   const name = data.name || data.title || existing.name;
   const type = data.type || data.category || existing.type;
 
-  // Resolve hero image
+  // Resolve hero image: never overwrite existing canonical image with a generic placeholder
   let heroImage = existing.hero_image;
-  if (data.heroImage !== undefined) {
-    heroImage = data.heroImage || null;
-  } else if (data.hero_image !== undefined) {
-    heroImage = data.hero_image || null;
-  } else if (data.image !== undefined) {
-    heroImage = data.image || null;
+  const candidateHero = data.heroImage !== undefined 
+    ? data.heroImage 
+    : (data.hero_image !== undefined ? data.hero_image : data.image);
+
+  if (candidateHero !== undefined) {
+    if (!candidateHero) {
+      // If empty string or null passed without new file, preserve existing hero image
+      heroImage = existing.hero_image;
+    } else if (!isPlaceholderUrl(candidateHero)) {
+      heroImage = candidateHero;
+    }
+    // If candidateHero is a placeholder, strictly preserve existing.hero_image!
   }
 
   // Gallery array
