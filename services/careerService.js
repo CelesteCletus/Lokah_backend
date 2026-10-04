@@ -80,12 +80,24 @@ export const createApplication = async (data) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
     [data.jobId || null, data.jobTitle || null, data.name, data.email, data.phone, data.resumePath, data.position, now()]
   );
-  return db.get('SELECT * FROM job_applications WHERE id = ?', [result.lastID]);
+  const row = await db.get('SELECT * FROM job_applications WHERE id = ?', [result.lastID]);
+  return mapApplication(row);
 };
 
 export const getApplications = async () => {
   const db = await getDb();
-  return db.all('SELECT * FROM job_applications ORDER BY id DESC');
+  const rows = await db.all('SELECT * FROM job_applications ORDER BY id DESC');
+  return rows.map(mapApplication);
+};
+
+const mapApplication = (row) => {
+  if (!row) return null;
+  return {
+    ...row,
+    jobId: row.job_id ?? row.jobId,
+    jobTitle: row.job_title ?? row.jobTitle,
+    resumePath: row.resume_path ?? row.resumePath,
+  };
 };
 
 const parseArr = (val) => {
