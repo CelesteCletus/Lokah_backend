@@ -92,7 +92,8 @@ if (rawDbUrl) {
       connectionLimit: 10,
       queueLimit: 0,
       dateStrings: true,
-      connectTimeout: 10000,
+      connectTimeout: 20000,
+      maxAllowedPacket: 67108864,
       multipleStatements: true,
     };
   } catch {
@@ -109,7 +110,8 @@ if (rawDbUrl) {
     connectionLimit: 10,
     queueLimit: 0,
     dateStrings: true,
-    connectTimeout: 10000,
+    connectTimeout: 20000,
+    maxAllowedPacket: 67108864,
     multipleStatements: true,
     ...(sslOptions ? { ssl: sslOptions } : {}),
   };

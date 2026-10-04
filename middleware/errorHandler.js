@@ -2,7 +2,10 @@ export const errorHandler = (err, req, res, next) => {
   console.error('💥 Express Error Caught:');
   console.error(err.stack || err.message || err);
 
-  const statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || (err.status ? err.status : 500);
+  if (err.name === 'MulterError') {
+    statusCode = 400;
+  }
   const isProd = process.env.NODE_ENV === 'production';
 
   res.status(statusCode).json({

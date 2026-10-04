@@ -48,18 +48,21 @@ const createStorage = (folderType) => {
 // the file must match a real allowed extension AND a plausible MIME type.
 const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic'];
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif'];
+const ALLOWED_PDF_MIMES = ['application/pdf', 'application/x-pdf', 'application/octet-stream'];
 
 const mediaFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname || '').toLowerCase();
   const mime = (file.mimetype || '').toLowerCase();
 
   const isAllowedImage = ALLOWED_IMAGE_EXTS.includes(ext) && ALLOWED_IMAGE_MIMES.includes(mime);
-  const isAllowedPdf = ext === '.pdf' && mime === 'application/pdf';
+  const isAllowedPdf = ext === '.pdf' && ALLOWED_PDF_MIMES.includes(mime);
 
   if (isAllowedImage || isAllowedPdf) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file format for ${file.originalname}. Allowed: Images (JPG, PNG, WEBP, GIF, AVIF, HEIC) and PDFs.`));
+    const err = new Error(`Invalid file format for ${file.originalname}. Allowed: Images (JPG, PNG, WEBP, GIF, AVIF, HEIC) and PDFs.`);
+    err.statusCode = 400;
+    cb(err);
   }
 };
 
@@ -67,10 +70,12 @@ const pdfFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname || '').toLowerCase();
   const mime = (file.mimetype || '').toLowerCase();
 
-  if (ext === '.pdf' && mime === 'application/pdf') {
+  if (ext === '.pdf' && ALLOWED_PDF_MIMES.includes(mime)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid document format. Only PDF files are allowed.'));
+    const err = new Error('Invalid document format. Only PDF files are allowed.');
+    err.statusCode = 400;
+    cb(err);
   }
 };
 
